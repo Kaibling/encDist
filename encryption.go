@@ -10,8 +10,9 @@ import ("log"
 
 func encryptData(encryptionKey []byte, data []byte) []byte {
 
-	//text := bytes.Repeat([]byte("i"), 96)
-
+	if len(encryptionKey) != 32 {
+		encryptionKey = padKey(encryptionKey)
+	}
     c, err := aes.NewCipher(encryptionKey)
     if err != nil {
         log.Println(err)
@@ -29,9 +30,18 @@ func encryptData(encryptionKey []byte, data []byte) []byte {
 	return gcm.Seal(nonce, nonce, data, nil)
 }
 
+func padKey( key []byte) []byte {
 
+	for i := len(key); i <  32; i++ {
+			key = append(key,key[i%len(key)])
+	}
+	return key
+} 
 
 func decryptdata(decryptionKey []byte,ciphertext []byte) []byte {
+	if len(decryptionKey) != 32 {
+		decryptionKey = padKey(decryptionKey)
+	}
     c, err := aes.NewCipher(decryptionKey)
     if err != nil {
         log.Println(err)
