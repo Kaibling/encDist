@@ -21,7 +21,8 @@ type CryptoData struct {
 func (CryptoData *CryptoData) encryptData(data []byte, publickey rsa.PublicKey,username string) {
 
 	//todo: generate password
-	aeskey := []byte("passphrasewhichneedstobe32bytes!")
+	aeskey := make([]byte, 32)
+	rand.Read(aeskey)
 	CryptoData.Data = AESencryptData(aeskey,data)
 	CryptoData.Keys = make(map[string][]byte)
 	encryptedKey := RSAEncrypt(aeskey,&publickey)

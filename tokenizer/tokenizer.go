@@ -42,6 +42,14 @@ func (Tokenizer *Tokenizer) NewUser(name string, password string) {
 func (Tokenizer *Tokenizer) GetToken(name string, password string) string {
 
 	//check if user already exists
+	log.Debugf("check user %s in tokenBuffer",name)
+	for key,val := range Tokenizer.userBuffer {
+		if val.Name == name {
+			log.Debugf("User found in tokenBuffer")
+			return key
+		}
+	}
+
 	
 	checkuser := libs.SQLiteGetFullUser(Tokenizer.dbFilePath , name,password)
 	if checkuser == nil {
@@ -49,6 +57,8 @@ func (Tokenizer *Tokenizer) GetToken(name string, password string) string {
 		return ""
 	}
 	guid := xid.New()
+	log.Debugf("User found in DB. Generating GUId %s",guid.String())
+	Tokenizer.userBuffer[guid.String()] = checkuser
 	return guid.String()
 }
 
