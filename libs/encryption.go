@@ -1,4 +1,4 @@
-package main
+package libs
 
 import (
 	log "github.com/sirupsen/logrus"
@@ -8,6 +8,7 @@ import (
 	"crypto/cipher"
 	"io"
 	"crypto/sha1"
+	"encoding/hex"
 )
 
 
@@ -159,12 +160,11 @@ func  RSADecrypt(cipherText []byte, privateKey *rsa.PrivateKey) []byte {
 	return decryptedmsg
 }
 
-/*
+
 func SHA1HashString(data []byte) string {
 	h := sha1.New()
 
 	h.Write(data)
 	 bs := h.Sum(nil)
-	return string(bs)
+	return hex.EncodeToString(bs)
 }
-*/

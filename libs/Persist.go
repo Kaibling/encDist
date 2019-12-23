@@ -1,4 +1,4 @@
-package main
+package libs
 
 
 import (
@@ -9,6 +9,22 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 )
+
+
+//User sds
+type FullUser struct {
+	Name string
+	Password string
+	PrivateKey *rsa.PrivateKey
+}
+
+//User sds
+type User struct {
+	Name string
+	id int32
+	Password string
+}
+
 
 // SQLiteInitDB ´sdd
 func SQLiteInitDB(dbpath string) {
@@ -36,14 +52,15 @@ func SQLiteaddUser(dbpath string, user *User, privKey *rsa.PrivateKey) {
 	}
 
 	//encrypt privateKey
-	encyptPrivKey := AESencryptData([]byte(user.password),jsonPrivKey)
+	encyptPrivKey := AESencryptData([]byte(user.Password),jsonPrivKey)
 	 db, err := sql.Open("sqlite3", dbpath)
 
     checkErr(err)
-    // insert
+	// insert
+	passwordHash := SHA1HashString([]byte(user.Password))
     stmt, err := db.Prepare("INSERT INTO user(username, privateKey, created,password ) values(?,?,?,?)")
     checkErr(err)
-	res, err := stmt.Exec(user.name, encyptPrivKey, time.Now(), user.password)
+	res, err := stmt.Exec(user.Name, encyptPrivKey, time.Now(), passwordHash)
     checkErr(err)
     id, err := res.LastInsertId()
 	checkErr(err)
@@ -52,6 +69,44 @@ func SQLiteaddUser(dbpath string, user *User, privKey *rsa.PrivateKey) {
 }
 
 
+func SQLiteGetFullUser(dbpath string, name string,password string) *FullUser {
+	
+	db, err := sql.Open("sqlite3", dbpath)
+    checkErr(err)
+
+	passwordHash := SHA1HashString([]byte(password))
+	// todo: has to be better
+	rows, err := db.Query("Select username,password,privateKey from user where username = '" + name + "' and password = '"+ passwordHash+"'")
+	checkErr(err)
+	var username string
+	var pwd string
+	var encPrivateKeyJSON []byte
+	var cnt int
+	for rows.Next() {
+		cnt++
+		err = rows.Scan(&username, &pwd,&encPrivateKeyJSON)
+        checkErr(err)
+	}
+	rows.Close()
+	db.Close()
+	
+	if cnt == 0 {
+		return nil
+	}
+
+	privateKeyJSON := AESdecryptdata([]byte(password),encPrivateKeyJSON)
+	var ha rsa.PrivateKey
+
+	err = json.Unmarshal(privateKeyJSON,&ha)
+	if err != nil {
+		log.Errorln(err)
+	}
+	returnUser := new(FullUser)
+	returnUser.Name = username
+	returnUser.Password = password
+	returnUser.PrivateKey = &ha
+	return returnUser
+}
 func SQLiteGetUser(dbpath string, name string) *User {
 	
 	db, err := sql.Open("sqlite3", dbpath)
@@ -74,9 +129,10 @@ func SQLiteGetUser(dbpath string, name string) *User {
 	if cnt == 0 {
 		return nil
 	}
+	
 	returnUser := new(User)
-	returnUser.name = username
-	returnUser.password = password
+	returnUser.Name = username
+	returnUser.Password = password
 	return returnUser
 }
 
