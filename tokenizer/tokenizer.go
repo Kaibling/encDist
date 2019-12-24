@@ -107,8 +107,6 @@ func (Tokenizer *Tokenizer) encryptHandler(w http.ResponseWriter, r *http.Reques
 	decryptUser := Tokenizer.userBuffer[responseData.Token]
 	cryptoData := new(libs.CryptoData)
     cryptoData.EncryptData(responseData.Data,decryptUser.PrivateKey.PublicKey,decryptUser.Name)
-    log.Debug("Keys")
-    log.Debug(cryptoData.Keys)
 
 	//send data to publisher
 	CryptoDataTransfer := new(libs.CryptoDataTransfer)
@@ -151,7 +149,6 @@ func (Tokenizer *Tokenizer) decryptHandler(w http.ResponseWriter, r *http.Reques
 		log.Fatalln(err)
 	}
 	data, err := ioutil.ReadAll(resp.Body)
-	log.Println(string(data))
 
 	var encryptedData libs.CryptoData
     json.Unmarshal(data,&encryptedData)
