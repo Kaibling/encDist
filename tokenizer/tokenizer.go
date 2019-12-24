@@ -12,23 +12,25 @@ import (
 
 type Tokenizer struct {
 	userBuffer map[string] *libs.FullUser
-	dbFilePath string
+	configuration *libs.Configuration
 }
 
 //NewUserstore dff
-func NewTokenizer(dbFilePath string ) *Tokenizer{
+func NewTokenizer(configuration *libs.Configuration ) *Tokenizer{
 
 	returnUserStore := new(Tokenizer)
 	returnUserStore.userBuffer = make(map[string] *libs.FullUser)
-	returnUserStore.dbFilePath = dbFilePath
-	libs.SQLiteInitDB(dbFilePath)
+	returnUserStore.configuration = configuration
+	log.Debug("Loaded Config")
+	log.Debug(returnUserStore.configuration)
+	libs.SQLiteInitDB(returnUserStore.configuration.DBpath)
 	return returnUserStore
 }
 
 func (Tokenizer *Tokenizer) NewUser(name string, password string) {
 
 	//check if user already exists
-	checkuser := libs.SQLiteGetUser(Tokenizer.dbFilePath , name)
+	checkuser := libs.SQLiteGetUser(Tokenizer.configuration.DBpath , name)
 	if checkuser != nil {
 		log.Printf("User does already exist: " + checkuser.Name)
 		return
@@ -36,7 +38,7 @@ func (Tokenizer *Tokenizer) NewUser(name string, password string) {
 	newUser := new(libs.User)
 	newUser.Name = name
 	newUser.Password = password
-	libs.SQLiteaddUser(Tokenizer.dbFilePath , newUser,libs.GenerateRSAKeyPair())
+	libs.SQLiteaddUser(Tokenizer.configuration.DBpath , newUser,libs.GenerateRSAKeyPair())
 }
 
 func (Tokenizer *Tokenizer) GetToken(name string, password string) string {
@@ -51,7 +53,7 @@ func (Tokenizer *Tokenizer) GetToken(name string, password string) string {
 	}
 
 	
-	checkuser := libs.SQLiteGetFullUser(Tokenizer.dbFilePath , name,password)
+	checkuser := libs.SQLiteGetFullUser(Tokenizer.configuration.DBpath , name,password)
 	if checkuser == nil {
 		log.Printf("User/Password does not match")
 		return ""
@@ -64,14 +66,14 @@ func (Tokenizer *Tokenizer) GetToken(name string, password string) string {
 
 func (Tokenizer *Tokenizer) StartServer() {
 	http.HandleFunc("/token", Tokenizer.tokenHandler)
-	log.Info("server started on Port 8070" )
-	http.ListenAndServe(":8070", nil)
+	log.Info("server started on Port " + Tokenizer.configuration.BindingPort )
+	http.ListenAndServe(":"+Tokenizer.configuration.BindingPort, nil)
 }
 
 
 func (Tokenizer *Tokenizer) tokenHandler(w http.ResponseWriter, r *http.Request) {
 
-	log.Debug(r.Body)
+	log.Debug(r)
 
 	var responseUser libs.User
 	buf := new(bytes.Buffer)

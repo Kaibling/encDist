@@ -8,8 +8,69 @@ import (
 	"time"
 	"crypto/rsa"
 	"encoding/json"
+	"os"
+		"flag"
 )
 
+type Configuration struct {
+	BindingIPAddress string
+	BindingPort      string
+	DBpath	         string
+}
+
+func ParseArguments() map[string]string {
+
+	arguments := make(map[string]string)
+	configString := flag.String("config", "config.json", "filepath to configuration file")
+	flag.Parse()
+
+	arguments["configFilePath"] = *configString
+	log.Print("load command line arguments ")
+	log.Print(arguments)
+
+	return arguments
+}
+
+func ParseConfigurationFile(filepath string) *Configuration {
+
+	if filepath == "config.json" {
+		//default path found
+		//create config file
+		_, err := os.Stat(filepath)
+
+		if os.IsNotExist(err) {
+			log.Println("file does not exists")
+
+			fo, err := os.Create("config.json")
+			checkErr(err)
+
+			returnConfig := new(Configuration)
+			returnConfig.BindingIPAddress = "127.0.0.1"
+			returnConfig.BindingPort = "8070"
+			returnConfig.DBpath = "./sqlitehier.db"
+
+			configString, err := json.Marshal(returnConfig)
+			checkErr(err)
+
+			_, err = fo.Write(configString)
+			checkErr(err)
+
+			defer fo.Close()
+			log.Println("Configuration file created")
+			return returnConfig
+		}
+
+	}
+	log.Println("opening configuration file: " + filepath)
+	returnConfig := new(Configuration)
+	file, err := os.Open(filepath)
+	checkErr(err)
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&returnConfig)
+	checkErr(err)
+
+	return returnConfig
+}
 
 //User sds
 type FullUser struct {
