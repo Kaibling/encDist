@@ -27,8 +27,11 @@ func NewPublisher(configuration *libs.Configuration ) *Publisher{
 
 
 func (Publisher *Publisher) StartServer() {
+
 	libs.SQLiteInitPshDB(Publisher.configuration.DBpath)
-	http.HandleFunc("/publish", Publisher.publishHandler)
+    http.HandleFunc("/publish", Publisher.publishHandler)
+    http.HandleFunc("/data", Publisher.dataHandler)
+
 	log.Info("server started on Port " + Publisher.configuration.BindingPort )
 	http.ListenAndServe(":"+Publisher.configuration.BindingPort, nil)
 
@@ -40,15 +43,22 @@ func (Publisher *Publisher) publishHandler(w http.ResponseWriter, r *http.Reques
 	var responseData libs.CryptoDataTransfer
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(r.Body)
-	json.Unmarshal([]byte(buf.String()), &responseData)
+    json.Unmarshal([]byte(buf.String()), &responseData)
 
 	//save data
-	libs.SQLiteaddPublishData(Publisher.configuration.DBpath,responseData.CryptoData)
-
-	fmt.Fprintf(w,"OK")
-
-
+	guid := libs.SQLiteaddPublishData(Publisher.configuration.DBpath,responseData.CryptoData)
+	fmt.Fprintf(w,guid)
+	libs.SQLiteGetALLPublishData(Publisher.configuration.DBpath)
 }
 
-func decryptHandler(w http.ResponseWriter, r *http.Request) {
+func (Publisher *Publisher) dataHandler(w http.ResponseWriter, r *http.Request) {
+
+    err := r.ParseForm()
+	if err != nil {
+		panic(err)
+	}
+    hash := r.Form.Get("hash")
+    requestedData := libs.SQLiteGetPublishedData(Publisher.configuration.DBpath,hash)
+	fmt.Fprintf(w,string(requestedData))
+
 }

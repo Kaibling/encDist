@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 )
 
 //Tokenizer sd
@@ -72,6 +73,8 @@ func (Tokenizer *Tokenizer) GetToken(name string, password string) string {
 func (Tokenizer *Tokenizer) StartServer() {
 	http.HandleFunc("/token", Tokenizer.tokenHandler)
 	http.HandleFunc("/encrypt", Tokenizer.encryptHandler)
+	http.HandleFunc("/decrypt", Tokenizer.decryptHandler)
+	
 	log.Info("server started on Port " + Tokenizer.configuration.BindingPort )
 	http.ListenAndServe(":"+Tokenizer.configuration.BindingPort, nil)
 }
@@ -103,13 +106,15 @@ func (Tokenizer *Tokenizer) encryptHandler(w http.ResponseWriter, r *http.Reques
  	//encrypt data
 	decryptUser := Tokenizer.userBuffer[responseData.Token]
 	cryptoData := new(libs.CryptoData)
-	cryptoData.EncryptData(responseData.Data,decryptUser.PrivateKey.PublicKey,decryptUser.Name)
+    cryptoData.EncryptData(responseData.Data,decryptUser.PrivateKey.PublicKey,decryptUser.Name)
+    log.Debug("Keys")
+    log.Debug(cryptoData.Keys)
 
 	//send data to publisher
 	CryptoDataTransfer := new(libs.CryptoDataTransfer)
 	CryptoDataTransfer.Token = responseData.Token
 	CryptoDataTransfer.CryptoData = *cryptoData
-	
+
 	jsonBytes,err := json.Marshal(CryptoDataTransfer)
 	if err != nil {
 		log.Warn(err)
@@ -121,7 +126,44 @@ func (Tokenizer *Tokenizer) encryptHandler(w http.ResponseWriter, r *http.Reques
 		log.Fatalln(err)
 	}
 	data, err := ioutil.ReadAll(resp.Body)
+	log.Printf("Resource in Publisher created: %s", string(data))
+
+	fmt.Fprintf(w,string(data))
+}
+
+func (Tokenizer *Tokenizer) decryptHandler(w http.ResponseWriter, r *http.Request) {
+
+	//recieve token and hash
+	err := r.ParseForm()
+	if err != nil {
+		panic(err)
+	}
+
+	token := r.Form.Get("token")
+	hash := r.Form.Get("hash")
+
+	//get data from publisher
+	connectionString := "http://127.0.0.1:8071/data"
+	postData := url.Values{}
+    postData.Add("hash", hash)
+	resp, err := http.Post(connectionString, "application/x-www-form-urlencoded; param=value", bytes.NewBufferString(postData.Encode()))
+	if err != nil {
+		log.Fatalln(err)
+	}
+	data, err := ioutil.ReadAll(resp.Body)
 	log.Println(string(data))
 
-	fmt.Fprintf(w,"OK")
+	var encryptedData libs.CryptoData
+    json.Unmarshal(data,&encryptedData)
+
+	//get user
+    decryptionUser := Tokenizer.userBuffer[token]
+
+    //decrypt
+    plainData := encryptedData.DecryptData(decryptionUser.Name,*decryptionUser.PrivateKey)
+	
+    //send decrpyted data back
+    fmt.Fprintf(w,string(plainData))
+
+
 }

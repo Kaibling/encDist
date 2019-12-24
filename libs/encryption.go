@@ -38,7 +38,7 @@ func (CryptoData *CryptoData) showKeys() {
 
 }
 
-func (CryptoData *CryptoData) decryptData(username string, privKey rsa.PrivateKey) []byte {
+func (CryptoData *CryptoData) DecryptData(username string, privKey rsa.PrivateKey) []byte {
 
 	aeskey := RSADecrypt(CryptoData.Keys[username],&privKey)
 	plain := AESdecryptdata(aeskey,CryptoData.Data)
@@ -151,12 +151,12 @@ func GenerateRSAKeyPair() *rsa.PrivateKey {
 func  RSADecrypt(cipherText []byte, privateKey *rsa.PrivateKey) []byte {
 	label := []byte("")
 	sha1Hash := sha1.New()
-	log.Println("Decrypting Data ....")
+	log.Println("RSA Decrypting Data ....")
 	decryptedmsg, err := rsa.DecryptOAEP(sha1Hash, rand.Reader, privateKey, cipherText, label)
 	if err != nil {
 		log.Println(err)
 	}
-	log.Println("Decryption finished")
+	log.Println("RSA Decryption finished")
 
 	return decryptedmsg
 }
