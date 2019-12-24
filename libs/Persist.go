@@ -18,6 +18,16 @@ type Configuration struct {
 	DBpath	         string
 }
 
+type PlainDataTransfer struct {
+	Token string
+	Data []byte
+}
+
+type CryptoDataTransfer struct {
+	Token string
+	CryptoData CryptoData
+}
+
 func ParseArguments() map[string]string {
 
 	arguments := make(map[string]string)
@@ -87,8 +97,8 @@ type User struct {
 }
 
 
-// SQLiteInitDB ´sdd
-func SQLiteInitDB(dbpath string) {
+// SQLiteInitTknDB ´sdd
+func SQLiteInitTknDB(dbpath string) {
 	 db, err := sql.Open("sqlite3", dbpath)
 		checkErr(err)		
         // insert
@@ -226,4 +236,44 @@ func checkErr(err error) {
     if err != nil {
         panic(err)
     }
+}
+
+// PUBLISHER
+
+// SQLiteInitPshDB ´sdd
+func SQLiteInitPshDB(dbpath string) {
+	 db, err := sql.Open("sqlite3", dbpath)
+		checkErr(err)		
+        // insert
+        stmt, err := db.Prepare("CREATE TABLE `publish` ( `uid` INTEGER PRIMARY KEY AUTOINCREMENT, `data` blob NULL,`created` DATE NULL);")
+		 if err != nil {
+			log.Println("Database already existing")
+			db.Close()
+			return 
+		}
+        _, err = stmt.Exec()
+        if err != nil {
+			log.Println(err)
+		}
+}
+
+
+//SQLiteaddPublishData sds
+func SQLiteaddPublishData(dbpath string, data CryptoData  ) {
+
+	jsonBlob, err := json.Marshal(data)
+	if err != nil {
+		log.Println(err)
+	}
+	db, err := sql.Open("sqlite3", dbpath)
+    checkErr(err)
+	// insert
+    stmt, err := db.Prepare("INSERT INTO publish(data, created ) values(?,?)")
+    checkErr(err)
+	res, err := stmt.Exec(jsonBlob, time.Now())
+    checkErr(err)
+    id, err := res.LastInsertId()
+	checkErr(err)
+	stmt.Close()
+    log.Println(id)
 }

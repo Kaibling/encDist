@@ -18,7 +18,7 @@ type CryptoData struct {
 	Keys map[string][]byte
 }
 
-func (CryptoData *CryptoData) encryptData(data []byte, publickey rsa.PublicKey,username string) {
+func (CryptoData *CryptoData) EncryptData(data []byte, publickey rsa.PublicKey,username string) {
 
 	//todo: generate password
 	aeskey := make([]byte, 32)
