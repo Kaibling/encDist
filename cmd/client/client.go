@@ -8,7 +8,11 @@ import (
 	"github.com/kaibling/encDist/libs"
 		"io/ioutil"
     "net/url"
-    "os"
+	"os"
+	  "bufio"
+  "fmt"
+  "strings"
+	
 )
 type ClientConfig struct {
     TokenizerIP string 
@@ -23,23 +27,24 @@ func main() {
     clientConfig.TokenizerIP = "http://127.0.0.1:8070"
     clientConfig.Username = "hans"
     clientConfig.userpassword = "hanspwd"
-    saveConfig("config.json",clientConfig)
+	saveConfig("config.json",clientConfig)
+	
+	startConsole(clientConfig)
 
-    for _,ident := range clientConfig.SavedIdentifier {
-        log.Println(ident)
-    }
 
+/*
 	clientConfig.clientToken = getToken(clientConfig)
     identifier := encryptData(clientConfig,[]byte("hansi"))
     clientConfig.SavedIdentifier = append(clientConfig.SavedIdentifier,identifier)
     saveConfig("config.json",clientConfig)
     plainText := decryptData(clientConfig,identifier)
-    log.Print(plainText)
+	log.Print(plainText)
+	*/
 
 }
-func startConsole() {
+func startConsole(clientConfig *ClientConfig) {
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Println("p2p Network")
+	fmt.Println("  EncDist")
 	fmt.Println("------------")
 
 	for {
@@ -50,21 +55,50 @@ func startConsole() {
 		if text == "q" || text == "quit" {
 			return
 		}
-		switch text {
-			case "q":
-				return
-			case "quit":
-				return
-			case "help":
-				help()
-			case "ls":
-				listNodes()
-			default:
-				fmt.Println("unknown command")
+		commandArray := strings.Split(text," ")
+		if commandArray[0] == "d" || commandArray[0] =="decrypt" {
+			if len(commandArray) < 2  {
+				fmt.Println("command unknown")
+				continue
+			}
+			for _,val := range commandArray[1:] {
+				fmt.Println(decryptData(clientConfig,val))
+			}
+		} else {
+		
+			switch text {
+				case "help":
+					help()
+				case "ls":
+					getIdentifier(clientConfig)
+				case "encrypt": case "e":
+					menuEncryptData(clientConfig)
+				case "get token": case "t":
+					fmt.Println(getToken(clientConfig))
+				default:
+					fmt.Println("unknown command")
+			}
 		}
-
+	
 	}
 
+}
+
+func menuEncryptData(clientConfig *ClientConfig) {
+
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Print("encrpyt> ")
+		text, _ := reader.ReadString('\n')
+		text = strings.Replace(text, "\n", "", -1)
+
+		if text == "q" || text == "quit" {
+			return
+		}
+		identifier:= encryptData(clientConfig,[]byte(text))
+		clientConfig.SavedIdentifier = append(clientConfig.SavedIdentifier,identifier)
+    	saveConfig("config.json",clientConfig)
+	}
 }
 
 
@@ -80,13 +114,18 @@ func getToken(clientConfig *ClientConfig) string {
 		log.Fatalln(err)
 	}
 	data, err := ioutil.ReadAll(resp.Body)
-    log.Debugf("Token: %s",string(data))
+	log.Debugf("Token: %s",string(data))
+	clientConfig.clientToken = string(data)
     return string(data)
 }
 
 func encryptData(clientConfig *ClientConfig,data []byte) string {
 
 	connectionString := clientConfig.TokenizerIP+"/encrypt"
+	if clientConfig.clientToken == "" {
+		log.Errorf("no token provided")
+		return ""
+	}
 	responseData := &libs.PlainDataTransfer{Data: data,Token: clientConfig.clientToken}
 	bytesRepresentation, err := json.Marshal(responseData)
 	if err != nil {
@@ -105,6 +144,10 @@ func encryptData(clientConfig *ClientConfig,data []byte) string {
 func decryptData(clientConfig *ClientConfig,identifier string) string {
 
 	connectionString := clientConfig.TokenizerIP+"/decrypt"
+	if clientConfig.clientToken == "" {
+		log.Errorf("no token provided")
+		return ""
+	}
 	postData := url.Values{}
 	postData.Add("token", clientConfig.clientToken)
 	postData.Add("hash", identifier)
@@ -165,4 +208,17 @@ func saveConfig(configPath string, clientConfig *ClientConfig)  {
 		libs.CheckErr(err)
 		defer fo.Close()
 		log.Debugf("Configuration file saved")
+}
+
+func getIdentifier(clientConfig *ClientConfig) {
+    for _,ident := range clientConfig.SavedIdentifier {
+        log.Println(ident)
+    }
+}
+
+func help() {
+	fmt.Println("does things")
+	fmt.Println("ls				list identifier")
+	fmt.Println("encrypt / e	encrpyt data")
+	fmt.Println("get token / t  retrive token")
 }
