@@ -9,6 +9,7 @@ import (
 	"io"
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 )
 
 
@@ -23,7 +24,12 @@ func (CryptoData *CryptoData) EncryptData(data []byte, publickey rsa.PublicKey,u
 	//todo: generate password
 	aeskey := make([]byte, 32)
 	rand.Read(aeskey)
-	CryptoData.Data = AESencryptData(aeskey,data)
+	encryptedData, err := AESencryptData(aeskey,data)
+	if err != nil {
+		log.Debug(err)
+		return
+	}
+	CryptoData.Data = encryptedData
 	CryptoData.Keys = make(map[string][]byte)
 	encryptedKey := RSAEncrypt(aeskey,&publickey)
 	CryptoData.Keys[username] = encryptedKey
@@ -38,16 +44,25 @@ func (CryptoData *CryptoData) showKeys() {
 
 }
 
-func (CryptoData *CryptoData) DecryptData(username string, privKey rsa.PrivateKey) []byte {
+func (CryptoData *CryptoData) DecryptData(username string, privKey rsa.PrivateKey) ([]byte,error) {
 
-	aeskey := RSADecrypt(CryptoData.Keys[username],&privKey)
-	plain := AESdecryptdata(aeskey,CryptoData.Data)
-	return plain
+	aeskey,err := RSADecrypt(CryptoData.Keys[username],&privKey)
+	if err != nil {
+		return []byte(""),err
+	}
+	plain,err := AESdecryptdata(aeskey,CryptoData.Data)
+	if err != nil {
+		return []byte(""),err
+	}
+	return plain,nil
 }
 
 func (CryptoData *CryptoData) grantAccess(username string, privKey rsa.PrivateKey, username2 string, pubKey rsa.PublicKey) {
 
-	aeskey := RSADecrypt(CryptoData.Keys[username],&privKey)
+	aeskey,err := RSADecrypt(CryptoData.Keys[username],&privKey)
+	if err != nil {
+		return
+	}
 	encryptedKey := RSAEncrypt(aeskey,&pubKey)
 	CryptoData.Keys[username2] = encryptedKey
 }
@@ -55,7 +70,11 @@ func (CryptoData *CryptoData) grantAccess(username string, privKey rsa.PrivateKe
 
 
 //AESencryptData asds
-func AESencryptData(encryptionKey []byte, data []byte) []byte {
+func AESencryptData(encryptionKey []byte, data []byte) ([]byte, error) {
+	if len(encryptionKey) == 0 {
+		//log.Debugf("AES no Encryption Key provided \n")
+		return []byte(""),errors.New("AES no Encryption Key provided")
+	}
 
 	if len(encryptionKey) != 32 {
 		encryptionKey = padKey(encryptionKey)
@@ -74,7 +93,7 @@ func AESencryptData(encryptionKey []byte, data []byte) []byte {
     if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
         log.Println(err)
     }
-	return gcm.Seal(nonce, nonce, data, nil)
+	return gcm.Seal(nonce, nonce, data, nil), nil
 }
 
 func padKey( key []byte) []byte {
@@ -86,7 +105,8 @@ func padKey( key []byte) []byte {
 } 
 
 //AESdecryptdata ds
-func AESdecryptdata(decryptionKey []byte,ciphertext []byte) []byte {
+func AESdecryptdata(decryptionKey []byte,ciphertext []byte) ([]byte, error) {
+
 	if len(decryptionKey) != 32 {
 		decryptionKey = padKey(decryptionKey)
 	}
@@ -110,7 +130,7 @@ func AESdecryptdata(decryptionKey []byte,ciphertext []byte) []byte {
     if err != nil {
         log.Println(err)
     }
-    return plaintext
+    return plaintext,nil
 }
 
 
@@ -148,17 +168,17 @@ func GenerateRSAKeyPair() *rsa.PrivateKey {
 }
 
 //RSADecrypt sda
-func  RSADecrypt(cipherText []byte, privateKey *rsa.PrivateKey) []byte {
+func  RSADecrypt(cipherText []byte, privateKey *rsa.PrivateKey) ([]byte,error) {
 	label := []byte("")
 	sha1Hash := sha1.New()
 	log.Println("RSA Decrypting Data ....")
 	decryptedmsg, err := rsa.DecryptOAEP(sha1Hash, rand.Reader, privateKey, cipherText, label)
 	if err != nil {
-		log.Println(err)
+		return []byte(""),err
 	}
 	log.Println("RSA Decryption finished")
 
-	return decryptedmsg
+	return decryptedmsg, nil
 }
 
 

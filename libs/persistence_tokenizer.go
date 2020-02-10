@@ -34,7 +34,11 @@ func SQLiteaddUser(dbpath string, user *User, privKey *rsa.PrivateKey) {
 	}
 
 	//encrypt privateKey
-	encyptPrivKey := AESencryptData([]byte(user.Password),jsonPrivKey)
+	encyptPrivKey, err := AESencryptData([]byte(user.Password),jsonPrivKey)
+	if err != nil {
+		log.Debug(err)
+		return
+	}
 	 db, err := sql.Open("sqlite3", dbpath)
 
     CheckErr(err)
@@ -76,7 +80,11 @@ func SQLiteGetFullUser(dbpath string, name string,password string) *FullUser {
 		return nil
 	}
 
-	privateKeyJSON := AESdecryptdata([]byte(password),encPrivateKeyJSON)
+	privateKeyJSON,err := AESdecryptdata([]byte(password),encPrivateKeyJSON)
+	if err != nil {
+		log.Errorln(err)
+		return nil
+	}
 	var ha rsa.PrivateKey
 
 	err = json.Unmarshal(privateKeyJSON,&ha)
@@ -134,7 +142,11 @@ func SQLiteGetKeyPair(dbpath string, name string, aeskey string) (*rsa.PrivateKe
 	rows.Close()
 	db.Close()
 
-	privateKeyJSON := AESdecryptdata([]byte(aeskey),encPrivateKeyJSON)
+	privateKeyJSON,err := AESdecryptdata([]byte(aeskey),encPrivateKeyJSON)
+	if err != nil {
+		log.Errorln(err)
+		return nil,nil
+	}
 	var ha rsa.PrivateKey
 
 	err = json.Unmarshal(privateKeyJSON,&ha)

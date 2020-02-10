@@ -30,8 +30,8 @@ func NewTokenizer(configuration *libs.Configuration ) *Tokenizer{
 	return returnTokenizer
 }
 
-// NewUser dds
-func (Tokenizer *Tokenizer) NewUser(name string, password string) {
+
+func (Tokenizer *Tokenizer) newUser(name string, password string) {
 
 	//check if user already exists
 	checkuser := libs.SQLiteGetUser(Tokenizer.configuration.DBpath , name)
@@ -74,6 +74,7 @@ func (Tokenizer *Tokenizer) StartServer() {
 	http.HandleFunc("/token", Tokenizer.tokenHandler)
 	http.HandleFunc("/encrypt", Tokenizer.encryptHandler)
 	http.HandleFunc("/decrypt", Tokenizer.decryptHandler)
+	http.HandleFunc("/user", Tokenizer.userHandler)
 	
 	log.Info("server started on Port " + Tokenizer.configuration.BindingPort )
 	http.ListenAndServe(":"+Tokenizer.configuration.BindingPort, nil)
@@ -92,6 +93,26 @@ func (Tokenizer *Tokenizer) tokenHandler(w http.ResponseWriter, r *http.Request)
 	token := Tokenizer.GetToken(responseUser.Name,responseUser.Password)
 	log.Debugf("User %s got Token %s",responseUser.Name,token)
 	fmt.Fprintf(w,token)
+}
+
+// userHandler sd
+func (Tokenizer *Tokenizer) userHandler(w http.ResponseWriter, r *http.Request) {
+
+	err := r.ParseForm()
+	if err != nil {
+		panic(err)
+	}
+
+	userName := r.Form.Get("username")
+	password := r.Form.Get("password")
+	command := r.Form.Get("command")
+	if command == "CREATE" {
+		Tokenizer.newUser(userName,password)
+		fmt.Fprintf(w,"OK")
+	} else {
+		fmt.Fprintf(w,"OK")
+	}
+	
 }
 
 func (Tokenizer *Tokenizer) encryptHandler(w http.ResponseWriter, r *http.Request) {
@@ -154,13 +175,21 @@ func (Tokenizer *Tokenizer) decryptHandler(w http.ResponseWriter, r *http.Reques
     json.Unmarshal(data,&encryptedData)
 
 	//get user
-    decryptionUser := Tokenizer.userBuffer[token]
-
-    //decrypt
-    plainData := encryptedData.DecryptData(decryptionUser.Name,*decryptionUser.PrivateKey)
+	decryptionUser := Tokenizer.userBuffer[token]
+	if decryptionUser == nil {
+		log.Errorln("User not authentiicated")
+		fmt.Fprintf(w,"")
+		return
+	}
 	
+    //decrypt
+	plainData,err := encryptedData.DecryptData(decryptionUser.Name,*decryptionUser.PrivateKey)
+	if err != nil {
+		log.Errorln(err)
+		fmt.Fprintf(w,"")
+	} else {
     //send decrpyted data back
-    fmt.Fprintf(w,string(plainData))
-
-
+    	fmt.Fprintf(w,string(plainData))
+	}
+	
 }

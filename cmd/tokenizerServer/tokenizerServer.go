@@ -13,6 +13,5 @@ func main() {
 	cliArguments := libs.ParseArguments()
 	config := libs.ParseConfigurationFile(cliArguments["configFilePath"])
 	tokenizer := tokenizer.NewTokenizer(config)
-	tokenizer.NewUser("hans","hanspwd")
 	tokenizer.StartServer()
 }

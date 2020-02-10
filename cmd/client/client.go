@@ -12,6 +12,9 @@ import (
 	  "bufio"
   "fmt"
   "strings"
+  "syscall"
+  "os/exec"
+  "errors"
 	
 )
 type ClientConfig struct {
@@ -23,28 +26,15 @@ type ClientConfig struct {
 }
 
 func main() {
+	log.SetLevel(log.DebugLevel)
     clientConfig := ParseConfigFile("config.json")
-    clientConfig.TokenizerIP = "http://127.0.0.1:8070"
-    clientConfig.Username = "hans"
-    clientConfig.userpassword = "hanspwd"
-	saveConfig("config.json",clientConfig)
-	
 	startConsole(clientConfig)
-
-
-/*
-	clientConfig.clientToken = getToken(clientConfig)
-    identifier := encryptData(clientConfig,[]byte("hansi"))
-    clientConfig.SavedIdentifier = append(clientConfig.SavedIdentifier,identifier)
-    saveConfig("config.json",clientConfig)
-    plainText := decryptData(clientConfig,identifier)
-	log.Print(plainText)
-	*/
 
 }
 func startConsole(clientConfig *ClientConfig) {
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Println("  EncDist")
+	fmt.Println("  EncDist ")
+	fmt.Printf("user: %s\n",clientConfig.Username)
 	fmt.Println("------------")
 
 	for {
@@ -56,54 +46,135 @@ func startConsole(clientConfig *ClientConfig) {
 			return
 		}
 		commandArray := strings.Split(text," ")
-		if commandArray[0] == "d" || commandArray[0] =="decrypt" {
-			if len(commandArray) < 2  {
-				fmt.Println("command unknown")
-				continue
-			}
-			for _,val := range commandArray[1:] {
-				fmt.Println(decryptData(clientConfig,val))
-			}
-		} else {
-		
-			switch text {
-				case "help":
-					help()
-				case "ls":
-					getIdentifier(clientConfig)
-				case "encrypt": case "e":
-					menuEncryptData(clientConfig)
-				case "get token": case "t":
-					fmt.Println(getToken(clientConfig))
-				default:
-					fmt.Println("unknown command")
-			}
+
+		switch commandArray[0] {
+			case "help":
+				help()
+			case "ls":
+				getIdentifier(clientConfig)
+			case "p": fallthrough
+			case "password":
+				menusetPassword(clientConfig)
+			case "e": fallthrough
+			case "encrypt":
+				menuEncryptData(clientConfig,commandArray)
+			case "d": fallthrough
+			case "decrypt":
+				menuDecryptData(clientConfig,commandArray)
+			case "token": case "t":
+				fmt.Println(getToken(clientConfig))
+			case "createuser": 
+				menuCreateUser(clientConfig,commandArray)
+			default:
+				fmt.Println("unknown command")
 		}
 	
 	}
 
 }
 
-func menuEncryptData(clientConfig *ClientConfig) {
+func menusetPassword(clientConfig *ClientConfig) {
 
+	stty, _ := exec.LookPath("stty")
+	sttyArgs := syscall.ProcAttr{
+		"",
+		[]string{},
+		[]uintptr{os.Stdin.Fd(), os.Stdout.Fd(), os.Stderr.Fd()},
+		nil,
+	}
 	reader := bufio.NewReader(os.Stdin)
-	for {
-		fmt.Print("encrpyt> ")
-		text, _ := reader.ReadString('\n')
-		text = strings.Replace(text, "\n", "", -1)
 
-		if text == "q" || text == "quit" {
-			return
+	fmt.Print("Enter Password: ")
+	// Disable echo.
+	if stty != "" {
+		syscall.ForkExec(stty, []string{"stty", "-echo"}, &sttyArgs)
+	}
+
+	// Get password.
+	pass, _ := reader.ReadString('\n')
+	pass = strings.Replace(pass, "\n", "", -1)
+	fmt.Print("\n")
+
+	// Enable echo.
+	if stty != "" {
+		syscall.ForkExec(stty, []string{"stty", "echo"}, &sttyArgs)
+	}
+
+	clientConfig.userpassword = pass 
+	saveConfig("config.json",clientConfig)
+	fmt.Printf("Password set\n")
+}
+
+func menuEncryptData(clientConfig *ClientConfig, commandArray []string) {
+	if len(commandArray) < 2  {
+		fmt.Println("command unknown")
+		return
+	}
+
+	plainText := strings.Join(commandArray[1:], " ")
+	identifier, err := encryptData(clientConfig,[]byte(plainText))
+	if err != nil {
+		fmt.Println(err)
+	}
+	
+	clientConfig.SavedIdentifier = append(clientConfig.SavedIdentifier,identifier)
+	saveConfig("config.json",clientConfig)
+}
+
+func menuCreateUser(clientConfig *ClientConfig, commandArray []string) {
+	if len(commandArray) != 3  {
+		fmt.Println("missing arguments")
+		return
+	}
+
+	connectionString := "http://127.0.0.1:8070/user"
+	postData := url.Values{}
+	postData.Add("username", commandArray[1])
+	postData.Add("password", commandArray[2])
+	postData.Add("command", "CREATE")
+	resp, err := http.Post(connectionString, "application/x-www-form-urlencoded; param=value", bytes.NewBufferString(postData.Encode()))
+	if err != nil {
+		log.Fatalln(err)
+	}
+	data, err := ioutil.ReadAll(resp.Body)
+	if string(data) == "OK" {
+		clientConfig.Username = commandArray[1]
+		saveConfig("config.json",clientConfig)
+	} else {
+		fmt.Printf("User creation failed\n")
+	}
+
+
+}
+
+func menuDecryptData(clientConfig *ClientConfig, commandArray []string) {
+
+	if len(commandArray) < 2  {
+		fmt.Println("command unknown")
+		return
+	}
+	for _,val := range commandArray[1:] {
+		plaindata,err := decryptData(clientConfig,val)
+		if err != nil {
+		log.Debug(err)
 		}
-		identifier:= encryptData(clientConfig,[]byte(text))
-		clientConfig.SavedIdentifier = append(clientConfig.SavedIdentifier,identifier)
-    	saveConfig("config.json",clientConfig)
+		fmt.Println(plaindata)
 	}
 }
 
 
+
 func getToken(clientConfig *ClientConfig) string {
 	connectionString := clientConfig.TokenizerIP+"/token"
+	if clientConfig.Username == "" {
+		fmt.Printf("username not set")
+		return ""
+	}
+	if clientConfig.userpassword == "" {
+		fmt.Printf("password not set")
+		return ""
+	}
+
 	sendUser := &libs.User{Name: clientConfig.Username,Password: clientConfig.userpassword}
 	bytesRepresentation, err := json.Marshal(sendUser)
 	if err != nil {
@@ -114,17 +185,23 @@ func getToken(clientConfig *ClientConfig) string {
 		log.Fatalln(err)
 	}
 	data, err := ioutil.ReadAll(resp.Body)
-	log.Debugf("Token: %s",string(data))
-	clientConfig.clientToken = string(data)
-    return string(data)
+	if string(data) == "" {
+		fmt.Println("no token recieved. User/Password invalid")
+		return ""
+	} else {
+		log.Debugf("Token: %s",string(data))
+		fmt.Println("Token recieved")
+		clientConfig.clientToken = string(data)
+    	return string(data)
+	}
+	
 }
 
-func encryptData(clientConfig *ClientConfig,data []byte) string {
+func encryptData(clientConfig *ClientConfig,data []byte) (string, error) {
 
 	connectionString := clientConfig.TokenizerIP+"/encrypt"
 	if clientConfig.clientToken == "" {
-		log.Errorf("no token provided")
-		return ""
+		return "", errors.New("no token provided")
 	}
 	responseData := &libs.PlainDataTransfer{Data: data,Token: clientConfig.clientToken}
 	bytesRepresentation, err := json.Marshal(responseData)
@@ -138,25 +215,30 @@ func encryptData(clientConfig *ClientConfig,data []byte) string {
     returnData, err := ioutil.ReadAll(resp.Body)
     identifier := string(returnData)
     log.Debugf(" Identifier: %s",identifier)
-    return identifier
+    return identifier, nil
 }
 
-func decryptData(clientConfig *ClientConfig,identifier string) string {
+func decryptData(clientConfig *ClientConfig,identifier string) (string,error) {
 
 	connectionString := clientConfig.TokenizerIP+"/decrypt"
 	if clientConfig.clientToken == "" {
-		log.Errorf("no token provided")
-		return ""
+		fmt.Printf("no token provided\n")
+		return "", errors.New("no token provided")
 	}
 	postData := url.Values{}
 	postData.Add("token", clientConfig.clientToken)
 	postData.Add("hash", identifier)
 	resp, err := http.Post(connectionString, "application/x-www-form-urlencoded; param=value", bytes.NewBufferString(postData.Encode()))
 	if err != nil {
-		log.Fatalln(err)
+		log.Warn("no proper response from server")
+		log.Warn(err)
+		return "", errors.New("no proper response from server")
 	}
 	data, err := ioutil.ReadAll(resp.Body)
-    return string(data)
+	if string(data) == "" {
+		 return "", errors.New("no encryption possible")
+	}
+    return string(data), nil
 }
 
 
